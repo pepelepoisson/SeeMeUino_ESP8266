@@ -440,7 +440,8 @@ void CheckLight(){
   if (photocellReading>night_limit){light_status="night";}
   if (photocellReading<day_limit){light_status="day";}
   // No changes in light_status for levels in between two limits to avoid constant toggling
-  //light_status="night";
+  // For debugging only - REMOVE photocelle input to the code
+  light_status="night";
   
 }
 

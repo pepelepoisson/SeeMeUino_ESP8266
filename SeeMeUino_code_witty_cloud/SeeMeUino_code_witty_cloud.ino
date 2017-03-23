@@ -5,7 +5,10 @@
 #define LOW_BRIGHTNESS 10  // Set LEDS brightness
 #define HIGH_BRIGHTNESS 50  // Set LEDS brightness
 #define DATA_PIN 14
-#define MOSFET_GATE 2
+#define MOSFET_GATE 16
+#define RED_LED 15
+#define BLUE_LED 13
+#define GREEN_LED 12
 #define PushB1  0 // Pin for push button 1  
 #define Button_1_On  (!digitalRead(PushB1))
 #define PhotocellPin 0 // the cell and 10K pulldown are connected to a0
@@ -18,7 +21,7 @@
 // Variables used in CheckLight() routine
 String light_status=String("unknown");
 int photocellReading=0; // the analog reading from the analog resistor divider
-int day_limit=350, night_limit=400; // analog reading levels corresponding to switching from day to night - difference used to avoid toggling between two levels when light level is borderline
+int day_limit=350, night_limit=300; // analog reading levels corresponding to switching from day to night - difference used to avoid toggling between two levels when light level is borderline
 
 // Variables used in CheckAccel() routine
 const int MPU_addr=0x68;
@@ -62,13 +65,22 @@ void setup() {
   Wire.endTransmission(true);
   
   Serial.begin(115200);
-  while (!Serial);
+  //while (!Serial);
 
   pinMode(PushB1,INPUT);
   digitalWrite(PushB1,HIGH);  // Configure built-in pullup resitor for push button 1
   
   pinMode(MOSFET_GATE,OUTPUT);
   digitalWrite(MOSFET_GATE,HIGH);
+  
+  pinMode(RED_LED,OUTPUT);
+  digitalWrite(RED_LED,LOW);  
+
+  pinMode(GREEN_LED,OUTPUT);
+  digitalWrite(GREEN_LED,LOW);
+  
+  pinMode(BLUE_LED,OUTPUT);
+  digitalWrite(BLUE_LED,LOW);
   
   // LEDs strip
   FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);  
@@ -121,6 +133,11 @@ uint8_t gHue = 0; // rotating "base color" used by many of the patterns
 void LED(String pattern){
   if (pattern=="idle"){
     digitalWrite(MOSFET_GATE,HIGH);
+    
+    digitalWrite(RED_LED,LOW);
+    digitalWrite(GREEN_LED,LOW);
+    digitalWrite(BLUE_LED,HIGH);
+    
     FastLED.setBrightness(LOW_BRIGHTNESS); 
     for (int i = NUM_LEDS; i >=0; i--){
       leds[i]=CRGB::Blue;
@@ -130,6 +147,11 @@ void LED(String pattern){
   
   if (pattern=="cruising"){
     digitalWrite(MOSFET_GATE,HIGH);
+
+    digitalWrite(RED_LED,LOW);
+    digitalWrite(GREEN_LED,HIGH);
+    digitalWrite(BLUE_LED,LOW);
+        
     FastLED.setBrightness(LOW_BRIGHTNESS); 
     // Call the pattern function once, updating the 'leds' array
     //juggle();
@@ -138,6 +160,11 @@ void LED(String pattern){
   
   if (pattern=="braking"){
     digitalWrite(MOSFET_GATE,HIGH);
+    
+    digitalWrite(RED_LED,HIGH);
+    digitalWrite(GREEN_LED,LOW);
+    digitalWrite(BLUE_LED,LOW);
+    
     FastLED.setBrightness(HIGH_BRIGHTNESS); 
       for (int i = NUM_LEDS; i >=0; i--){
       leds[i]=CRGB::Red;
@@ -146,6 +173,11 @@ void LED(String pattern){
   
   if (pattern=="panic"){      
     digitalWrite(MOSFET_GATE,HIGH);
+
+    digitalWrite(RED_LED,HIGH);
+    digitalWrite(GREEN_LED,LOW);
+    digitalWrite(BLUE_LED,LOW);   
+    
     //FastLED.setBrightness(HIGH_BRIGHTNESS);
     FastLED.setBrightness(LOW_BRIGHTNESS);
     for (int i = NUM_LEDS; i >=0; i--){
@@ -159,7 +191,11 @@ void LED(String pattern){
       //leds[i]=CRGB::Black;
       leds[i].nscale8(230);
     }
-    digitalWrite(MOSFET_GATE,LOW);
+    digitalWrite(MOSFET_GATE,LOW);    
+    
+    digitalWrite(RED_LED,LOW);
+    digitalWrite(GREEN_LED,LOW);
+    digitalWrite(BLUE_LED,LOW);
   }
 
   // send the 'leds' array out to the actual LED strip
@@ -436,9 +472,9 @@ void CheckLight(){
   // Tunables: night_limit, day_limit
   // Output values: night, day, unknown
   photocellReading = analogRead(PhotocellPin);
-  //Serial.println(photocellReading);
-  if (photocellReading>night_limit){light_status="night";}
-  if (photocellReading<day_limit){light_status="day";}
+  Serial.println(photocellReading);
+  if (photocellReading<night_limit){light_status="night";}
+  if (photocellReading>day_limit){light_status="day";}
   // No changes in light_status for levels in between two limits to avoid constant toggling
   //light_status="night";
   
