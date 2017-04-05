@@ -1,15 +1,22 @@
 #include<Wire.h>
 #include "FastLED.h" // Librarie required for addressable LEDs
 
+// Code configuration
+#define DEBUG_SERIAL 0  // Set to 1 to output detailed data to serial
+#define MINIMAL_SERIAL 1 // Set to 1 to output minimal status data to serial
+#define USE_PHOTOCELL 0 // Set to 1 to include photocell readings in state switching
+
 #define NUM_LEDS 300  // How many leds in your strip?
 #define LOW_BRIGHTNESS 10  // Set LEDS brightness
-#define HIGH_BRIGHTNESS 50  // Set LEDS brightness
+#define HIGH_BRIGHTNESS 100  // Set LEDS brightness
 #define DATA_PIN 14
 #define MOSFET_GATE 16
+//#define MOSFET_GATE 13
 #define RED_LED 15
 #define BLUE_LED 13
 #define GREEN_LED 12
-#define PushB1  0 // Pin for push button 1  
+#define IMU_VCC  2 // Pin to power IMU with 3.3V 
+#define PushB1 0
 #define Button_1_On  (!digitalRead(PushB1))
 #define PhotocellPin 0 // the cell and 10K pulldown are connected to a0
 #define FRAMES_PER_SECOND  120
@@ -21,7 +28,7 @@
 // Variables used in CheckLight() routine
 String light_status=String("unknown");
 int photocellReading=0; // the analog reading from the analog resistor divider
-int day_limit=350, night_limit=300; // analog reading levels corresponding to switching from day to night - difference used to avoid toggling between two levels when light level is borderline
+int day_limit=250, night_limit=300; // analog reading levels corresponding to switching from day to night - difference used to avoid toggling between two levels when light level is borderline
 
 // Variables used in CheckAccel() routine
 const int MPU_addr=0x68;
@@ -34,7 +41,7 @@ float a_forward_long_lag=0.0, a_sideway_long_lag=0.0, a_vertical_long_lag=0.0, a
 float a_forward_lag=0.0, a_sideway_lag=0.0, a_vertical_lag=0.0, a_ratio_lag=0.0;
 float a_forward_change=0.0, a_sideway_change=0.0, a_vertical_change=0.0, a_ratio_change=0.0;  
 float long_lag_coef=0.005, lag_coef=0.1;
-float a_forward_threshold=10.0, a_sideway_threshold=10.0, a_vertical_threshold=10.0;
+float a_forward_threshold=10.0, a_sideway_threshold=10.0, a_vertical_threshold=15.0;
 float a_ratio_multiplier=200.0;
 float idle_test_threshold=2.0,fallen_test_multiplier=0.75, strong_braking_test_threshold=50.0, long_braking_test_threshold=20.0;
 //int idle_test_min_count=30, fallen_test_min_count=5, strong_braking_test_min_count=5, long_braking_test_min_count=40;
@@ -51,6 +58,15 @@ unsigned long start_time=0, current_time=0, elapsed_milliseconds=0;
 CRGB leds[NUM_LEDS];  // Define the array of leds
 
 void setup() {
+
+  Serial.begin(115200);
+  //while (!Serial);
+
+  pinMode(IMU_VCC,OUTPUT);
+  digitalWrite(IMU_VCC,HIGH);
+
+  delay(500);
+  
   // Set up MPU 6050:
   Wire.begin();
   #if ARDUINO >= 157
@@ -64,11 +80,8 @@ void setup() {
   Wire.write(0);     // set to zero (wakes up the MPU-6050)
   Wire.endTransmission(true);
   
-  Serial.begin(115200);
-  //while (!Serial);
-
   pinMode(PushB1,INPUT);
-  digitalWrite(PushB1,HIGH);  // Configure built-in pullup resitor for push button 1
+  digitalWrite(PushB1,HIGH);  // Configure built-in pullup resistor for push button 1
   
   pinMode(MOSFET_GATE,OUTPUT);
   digitalWrite(MOSFET_GATE,HIGH);
@@ -313,11 +326,12 @@ switch (condition) {
       if (accel_status=="strong_braking"||accel_status=="long_braking"){condition=Braking_mode;}
       if (accel_status=="fallen"){start_time=millis();condition=Panic_mode;}
       if (accel_status=="idle" & light_status=="night"){start_time=millis();condition=Idle_mode;}
-      if Button_1_On{
+/*      if Button_1_On{
         delay(50);
         while(Button_1_On){}
         nextPattern();
       }
+  */
       break;
       
     case Braking_mode:
@@ -337,8 +351,10 @@ switch (condition) {
       break;
    }  
 
-  
-  SerialOutput(); 
+  #if MINIMAL_SERIAL
+     SerialOutput(); 
+  #endif
+     
   //delay(100);
 
 }void CalibrateAccel(){
@@ -420,7 +436,17 @@ void CheckAccel(){
   a_sideway_change=a_sideway_lag-a_sideway_long_lag;
   a_vertical_change=a_vertical_lag-a_vertical_long_lag;
   a_ratio_change=a_ratio_lag-a_ratio_long_lag;
-  
+
+#if DEBUG_SERIAL
+  Serial.print(" a_forward_change:");Serial.print(a_forward_change);
+  Serial.print(" a_sideway_change:");Serial.print(a_sideway_change);
+  Serial.print(" a_vertical_change:");Serial.print(a_vertical_change);
+  Serial.print(" a_vertical:");Serial.print(a_vertical);
+  Serial.print(" a_vertical_lag:");Serial.print(a_vertical_lag);
+  Serial.print(" a_vertical_long_lag:");Serial.print(a_vertical_long_lag);
+  Serial.print(" a_ratio_change:");Serial.println(a_ratio_change);
+#endif
+
   // Evaluate current condition based on smoothed accelarations
   accel_status="cruising";
 
@@ -472,11 +498,18 @@ void CheckLight(){
   // Tunables: night_limit, day_limit
   // Output values: night, day, unknown
   photocellReading = analogRead(PhotocellPin);
-  Serial.println(photocellReading);
+  
+  #if DEBUG_SERIAL
+     Serial.print(" photocellReading: ");
+     Serial.print(photocellReading);
+  #endif
+  
   if (photocellReading<night_limit){light_status="night";}
   if (photocellReading>day_limit){light_status="day";}
   // No changes in light_status for levels in between two limits to avoid constant toggling
-  //light_status="night";
+  #if !USE_PHOTOCELL
+     light_status="night";
+  #endif
   
 }
 
